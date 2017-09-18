@@ -20,15 +20,15 @@ template<
     class PumpAcs712>
 class PumpController{
 private:
-    static const uint32_t LevelSensorDebounceTime = 200UL;
-    static const uint32_t PumpMonitoringDelay = 2UL * 1000UL; // 2 seconds
+    static const uint16_t LevelSensorDebounceTime = 200;
+    static const uint16_t PumpMonitoringDelay = 2 * 1000; // 2 seconds
     
     #ifdef DEBUG
-    static const uint32_t WaitingForWaterTime = 10UL * 1000UL; // 10 seconds (debug)
+    static const uint16_t WaitingForWaterTime = 10 * 1000; // 10 seconds (debug)
     static constexpr float PumpMaxCurrent = 2;
     static constexpr float PumpMinCurrent = 1;
     #else
-    static const uint32_t WaitingForWaterTime = 10UL * 60UL * 1000UL; // 10 minutes
+    static const uint16_t WaitingForWaterTime = 10U * 60U * 1000U; // 10 minutes
     static constexpr float PumpMaxCurrent = 7;
     static constexpr float PumpMinCurrent = 4;
     #endif
