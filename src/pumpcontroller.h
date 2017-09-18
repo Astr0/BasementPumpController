@@ -37,7 +37,7 @@ private:
     // down = critical level, up = ok
     fasthal::Bounce<CriticalLevelPin, LevelSensorDebounceTime> _criticalLevel;
     fasthal::Bounce<NormalLevelPin, LevelSensorDebounceTime> _normalLevel;
-    fasthal::PinBlink<StatusPin> _statusBlink;
+    fasthal::PinToggle<StatusPin> _statusBlink;
 
     PumpControllerState _currentState = PumpControllerState::Critical;
     fasthal::ElapsedMs _countdown;    
