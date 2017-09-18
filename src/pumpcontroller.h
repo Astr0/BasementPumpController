@@ -6,10 +6,10 @@
 #include "fasthal.h"
 
 enum PumpControllerState{
-    PumpControllerStateCritical = 0,
-    PumpControllerStateNormal = 1,
-    PumpControllerStateFilling = 2,
-    PumpControllerStateWaitingForWater = 3
+    Critical = 0,
+    Normal = 1,
+    Filling = 2,
+    WaitingForWater = 3
 };
 
 template<
@@ -35,13 +35,11 @@ private:
 
     // n/c state of pin == HIGH, this should correspond to critical level reached
     // down = critical level, up = ok
-    fasthal::Button<CriticalLevelPin> _criticalLevel;
-    fasthal::Button<NormalLevelPin> _normalLevel;
+    fasthal::Bounce<CriticalLevelPin, LevelSensorDebounceTime> _criticalLevel;
+    fasthal::Bounce<NormalLevelPin, LevelSensorDebounceTime> _normalLevel;
     fasthal::PinBlink<StatusPin> _statusBlink;
 
-    PumpControllerState _currentState = PumpControllerStateCritical;
-    bool _criticalLevelReached = true;
-    bool _normalLevelReached = true;    
+    PumpControllerState _currentState = PumpControllerState::Critical;
     fasthal::ElapsedMs _countdown;    
 
 
@@ -58,36 +56,31 @@ private:
 
         _currentState = state;
         _countdown.reset();
-        PumpPin::set(_currentState == PumpControllerStateFilling);           
+        PumpPin::set(_currentState == PumpControllerState::Filling);           
 
 
         switch (_currentState){
-            case PumpControllerStateFilling:
+            case PumpControllerState::Filling:
                 _statusBlink.change(200, 200);           
                 break;
-            case PumpControllerStateCritical:
+            case PumpControllerState::Critical:
                 _statusBlink.change(3000, 1000);           
                 break;
-            case PumpControllerStateNormal:
+            case PumpControllerState::Normal:
                 _statusBlink.change(200, 3000);           
                 break;
-            case PumpControllerStateWaitingForWater:
+            case PumpControllerState::WaitingForWater:
                 _statusBlink.change(1000, 1000);           
                 break;
         }
     }
     
-    void readLevels(){
-        if (_criticalLevel.debounce(LevelSensorDebounceTime))
-            _criticalLevelReached = _criticalLevel.pressed();
-
-        if (_normalLevel.debounce(LevelSensorDebounceTime))
-            _normalLevelReached = _normalLevel.pressed();
-    }
-
 public:
-    PumpController(): _statusBlink(3000, 1000){
-
+    PumpController():
+        _criticalLevel(true),
+        _normalLevel(true),
+        _statusBlink(3000, 1000)
+    {
     }
 
     void begin(){
@@ -105,32 +98,35 @@ public:
 
     void update(){
         _statusBlink.update();
-        readLevels();
+        _criticalLevel.update();
+        bool criticalLevelReached = _criticalLevel.read();
+        _normalLevel.update();
+        bool normalLevelReached = _normalLevel.read();
 
         switch (_currentState){
-            case PumpControllerStateCritical:
-                if (!_criticalLevelReached){
+            case PumpControllerState::Critical:
+                if (!criticalLevelReached){
                     // critical level gone, phew
-                    setState(PumpControllerStateNormal);
+                    setState(PumpControllerState::Normal);
                 }
                 break;
-            case PumpControllerStateNormal:
-                if (_criticalLevelReached){
+            case PumpControllerState::Normal:
+                if (criticalLevelReached){
                     // normal is still ok, but we reached critical... sensor failure
-                    setState(PumpControllerStateCritical);
-                } else if (!_normalLevelReached){
+                    setState(PumpControllerState::Critical);
+                } else if (!normalLevelReached){
                     // normal level gone, start filling
-                    setState(PumpControllerStateFilling);
+                    setState(PumpControllerState::Filling);
                 }
                 break;
-            case PumpControllerStateFilling:
-                if (_normalLevelReached)
+            case PumpControllerState::Filling:
+                if (normalLevelReached)
                 {
                     // reached top
-                    setState(PumpControllerStateNormal);
-                } else if (_criticalLevelReached){
+                    setState(PumpControllerState::Normal);
+                } else if (criticalLevelReached){
                     // sensor failure, haven't reached normal but reached critical
-                    setState(PumpControllerStateCritical);
+                    setState(PumpControllerState::Critical);
                 } else if (_countdown.elapsed(PumpMonitoringDelay)){
                     // monitor pump current
                     float current = PumpAcs712::read();
@@ -141,18 +137,18 @@ public:
                     #endif
                     
                     if ((current >= PumpMaxCurrent) || (current <= PumpMinCurrent))
-                        setState(PumpControllerStateWaitingForWater);
+                        setState(PumpControllerState::WaitingForWater);
                 }
                 break;
-            case PumpControllerStateWaitingForWater:
+            case PumpControllerState::WaitingForWater:
                 if (_countdown.elapsed(WaitingForWaterTime)){
                     // we've waited long enough - go to Normal state to check what to do
-                    setState(PumpControllerStateNormal);
+                    setState(PumpControllerState::Normal);
                 }
                 break;
             default:
                 // shouldn't be here
-                setState(PumpControllerStateCritical);
+                setState(PumpControllerState::Critical);
                 break;
         }
     }
